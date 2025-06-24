@@ -1,9 +1,12 @@
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import fitz  # pymupdf
 import anthropic
 import os
+import json
+from datetime import datetime
 
 app = FastAPI()
 
@@ -39,16 +42,19 @@ except Exception as e:
 # Cliente de Claude
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+# Ruta para preguntas
 @app.post("/ask")
 def ask_agent(q: Question):
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            messages=[
-                {
-                    "role": "user",
-                    "content": f"""Responde la siguiente pregunta utilizando SOLO esta información profesional:
+        # Guardar la pregunta en un archivo json por línea
+        log_entry = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "question": q.question
+        }
+        with open("questions.json", "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry) + "\n")
+
+        full_prompt = f"""{anthropic.HUMAN_PROMPT} Responde la siguiente pregunta utilizando SOLO esta información profesional:
 
 ### CONTEXTO .MD
 {context_md}
@@ -57,12 +63,30 @@ def ask_agent(q: Question):
 {context_pdf}
 
 Pregunta: {q.question}
+
+{anthropic.AI_PROMPT}
 """
-                }
-            ]
+        response = client.completions.create(
+            model="claude-3-sonnet-20240229",
+            prompt=full_prompt,
+            max_tokens_to_sample=500
         )
-        return {"answer": response.content[0].text.strip()}
+        return {"answer": response.completion.strip()}
+
     except Exception as e:
         return {"error": f"❌ Error interno: {str(e)}"}
 
+# Ruta para consultar preguntas (protegida con clave)
+@app.get("/questions")
+def get_logged_questions(request: Request):
+    key = request.query_params.get("key")
+    if key != os.getenv("ADMIN_KEY"):
+        return {"error": "🔒 Acceso denegado"}
 
+    try:
+        with open("questions.json", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            questions = [json.loads(line) for line in lines]
+        return {"questions": questions}
+    except Exception as e:
+        return {"error": f"❌ No se pudieron cargar las preguntas: {str(e)}"}
