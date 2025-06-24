@@ -55,7 +55,7 @@ Pregunta: {q.question}
 {anthropic.AI_PROMPT}
 """
         response = client.completions.create(
-            model="claude-3-sonnet-20240229",
+            model="claude-sonnet-4-20250514",
             prompt=full_prompt,
             max_tokens_to_sample=500
         )
