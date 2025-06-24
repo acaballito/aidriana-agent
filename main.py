@@ -55,7 +55,7 @@ Pregunta: {q.question}
 {anthropic.AI_PROMPT}
 """
         response = client.completions.create(
-            model="claude-2.1",
+            model="claude-instant-1.2",
             prompt=full_prompt,
             max_tokens_to_sample=500
         )
