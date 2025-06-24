@@ -42,7 +42,13 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 @app.post("/ask")
 def ask_agent(q: Question):
     try:
-        full_prompt = f"""{anthropic.HUMAN_PROMPT} Responde la siguiente pregunta utilizando SOLO esta información profesional:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Responde la siguiente pregunta utilizando SOLO esta información profesional:
 
 ### CONTEXTO .MD
 {context_md}
@@ -51,16 +57,12 @@ def ask_agent(q: Question):
 {context_pdf}
 
 Pregunta: {q.question}
-
-{anthropic.AI_PROMPT}
 """
-        response = client.completions.create(
-            model="claude-sonnet-4-20250514",
-            prompt=full_prompt,
-            max_tokens_to_sample=500
+                }
+            ]
         )
-        return {"answer": response.completion.strip()}
-
+        return {"answer": response.content[0].text.strip()}
     except Exception as e:
         return {"error": f"❌ Error interno: {str(e)}"}
+
 
