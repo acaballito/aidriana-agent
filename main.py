@@ -1,10 +1,12 @@
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import fitz  # pymupdf
 import anthropic
 import os
 import json
+from datetime import datetime
 
 app = FastAPI()
 
@@ -41,8 +43,10 @@ except Exception as e:
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 @app.post("/ask")
-def ask_agent(q: Question):
+async def ask_agent(q: Question, request: Request):
     try:
+        user_ip = request.client.host
+
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
@@ -65,29 +69,36 @@ Pregunta: {q.question}
 
         answer = response.content[0].text.strip()
 
-        # Guardar la pregunta en questions.json
+        # Guardar pregunta en questions.json
         try:
             with open("questions.json", "r", encoding="utf-8") as f:
-                history = json.load(f)
-        except:
-            history = []
+                previous = json.load(f)
+        except Exception:
+            previous = []
 
-        history.append({"question": q.question, "answer": answer})
+        previous.append({
+            "timestamp": datetime.utcnow().isoformat(),
+            "ip": user_ip,
+            "question": q.question,
+            "answer": answer,
+            "category": "no_clasificada"
+        })
 
         with open("questions.json", "w", encoding="utf-8") as f:
-            json.dump(history, f, ensure_ascii=False, indent=2)
+            json.dump(previous, f, indent=2, ensure_ascii=False)
 
         return {"answer": answer}
-
     except Exception as e:
         return {"error": f"❌ Error interno: {str(e)}"}
 
-
-# Ruta para acceder al historial de preguntas
 @app.get("/questions")
-def get_questions():
+def get_questions(key: str):
+    if key != "adriana2025!":
+        return {"error": "⛔ Clave incorrecta"}
+
     try:
         with open("questions.json", "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        return data
     except Exception as e:
         return {"error": f"❌ No se pudieron cargar las preguntas: {str(e)}"}
